@@ -1,6 +1,7 @@
-# Signal
-
 [![ci](https://github.com/fgrzl/signal/actions/workflows/ci.yml/badge.svg)](https://github.com/fgrzl/signal/actions/workflows/ci.yml)
+[![Dependabot Updates](https://github.com/fgrzl/signal/actions/workflows/dependabot/dependabot-updates/badge.svg)](https://github.com/fgrzl/signal/actions/workflows/dependabot/dependabot-updates)
+
+# Signal
 
 ## Table of Contents
 
