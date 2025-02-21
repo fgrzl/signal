@@ -1,4 +1,4 @@
-module github.com/fgrzl/signal
+module github.com/fgrzl/tickle
 
 go 1.23.0
 

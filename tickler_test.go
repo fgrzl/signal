@@ -1,4 +1,4 @@
-package signal_test
+package tickle_test
 
 import (
 	"context"
@@ -6,17 +6,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fgrzl/signal"
+	"github.com/fgrzl/tickle"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // Test basic subscription addition and notification.
-func TestSubscriptionManager_Notify(t *testing.T) {
+func TestSubscriptionManager_Tickle(t *testing.T) {
 	// Arrange
-	sm := signal.NewSubscriptionManager()
+	sm := tickle.NewTickler()
 	ctx := context.Background()
-	sub := sm.Add(ctx, "token1")
+	sub := sm.Subscribe(ctx, "token1")
 
 	var result bool
 	var wg sync.WaitGroup
@@ -28,7 +28,7 @@ func TestSubscriptionManager_Notify(t *testing.T) {
 	}()
 
 	// Act
-	sm.Notify("token1")
+	sm.Tickle("token1")
 
 	// Assert
 	wg.Wait()
@@ -38,9 +38,9 @@ func TestSubscriptionManager_Notify(t *testing.T) {
 // Test waiting with a timeout.
 func TestSubscription_WaitTimeout(t *testing.T) {
 	// Arrange
-	sm := signal.NewSubscriptionManager()
+	sm := tickle.NewTickler()
 	ctx := context.Background()
-	sub := sm.Add(ctx, "token1")
+	sub := sm.Subscribe(ctx, "token1")
 
 	// Act & Assert (timeout case)
 	require.False(t, sub.WaitTimeout(10*time.Millisecond), "WaitTimeout should return false when it times out")
@@ -55,7 +55,7 @@ func TestSubscription_WaitTimeout(t *testing.T) {
 	}()
 
 	// Act
-	sm.Notify("token1")
+	sm.Tickle("token1")
 
 	// Assert
 	wg.Wait()
@@ -65,9 +65,9 @@ func TestSubscription_WaitTimeout(t *testing.T) {
 // Test removing a subscription.
 func TestSubscriptionManager_Remove(t *testing.T) {
 	// Arrange
-	sm := signal.NewSubscriptionManager()
+	sm := tickle.NewTickler()
 	ctx := context.Background()
-	sub := sm.Add(ctx, "token1")
+	sub := sm.Subscribe(ctx, "token1")
 
 	var result bool
 	var wg sync.WaitGroup
@@ -79,8 +79,8 @@ func TestSubscriptionManager_Remove(t *testing.T) {
 	}()
 
 	// Act
-	sm.Remove(sub)
-	sm.Notify("token1")
+	sm.Unsubscribe(sub)
+	sm.Tickle("token1")
 
 	// Assert
 	wg.Wait()
@@ -91,7 +91,7 @@ func TestSubscriptionManager_Remove(t *testing.T) {
 func TestSubscription_Dispose(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	sub := signal.NewSubscription(ctx, "token1")
+	sub := tickle.NewSubscription(ctx, "token1")
 
 	var result bool
 	var wg sync.WaitGroup
@@ -108,16 +108,16 @@ func TestSubscription_Dispose(t *testing.T) {
 	// Assert
 	wg.Wait()
 	assert.False(t, result, "WaitTimeout should return false after Dispose()")
-	assert.NotPanics(t, func() { sub.Notify() }, "Notify() should not panic after Dispose()")
+	assert.NotPanics(t, func() { sub.Tickle() }, "Tickle() should not panic after Dispose()")
 }
 
 // Test that multiple subscribers can wait for different tokens.
 func TestSubscriptionManager_MultipleSubscriptions(t *testing.T) {
 	// Arrange
-	sm := signal.NewSubscriptionManager()
+	sm := tickle.NewTickler()
 	ctx := context.Background()
-	sub1 := sm.Add(ctx, "token1")
-	sub2 := sm.Add(ctx, "token2")
+	sub1 := sm.Subscribe(ctx, "token1")
+	sub2 := sm.Subscribe(ctx, "token2")
 
 	var result1, result2 bool
 	var wg sync.WaitGroup
@@ -133,7 +133,7 @@ func TestSubscriptionManager_MultipleSubscriptions(t *testing.T) {
 	}()
 
 	// Act
-	sm.Notify("token1")
+	sm.Tickle("token1")
 
 	// Assert
 	wg.Wait()
@@ -144,10 +144,10 @@ func TestSubscriptionManager_MultipleSubscriptions(t *testing.T) {
 // Test that multiple subscriptions can receive the same notification.
 func TestSubscriptionManager_MultipleSubscribersSameToken(t *testing.T) {
 	// Arrange
-	sm := signal.NewSubscriptionManager()
+	sm := tickle.NewTickler()
 	ctx := context.Background()
-	sub1 := sm.Add(ctx, "token1")
-	sub2 := sm.Add(ctx, "token1") // Both subscriptions listen to the same token
+	sub1 := sm.Subscribe(ctx, "token1")
+	sub2 := sm.Subscribe(ctx, "token1") // Both subscriptions listen to the same token
 
 	var result1, result2 bool
 	var wg sync.WaitGroup
@@ -163,7 +163,7 @@ func TestSubscriptionManager_MultipleSubscribersSameToken(t *testing.T) {
 	}()
 
 	// Act
-	sm.Notify("token1")
+	sm.Tickle("token1")
 
 	// Assert
 	wg.Wait()
@@ -171,12 +171,12 @@ func TestSubscriptionManager_MultipleSubscribersSameToken(t *testing.T) {
 	assert.True(t, result2, "sub2 should be notified")
 }
 
-// Test that notifying a non-existent token does nothing.
-func TestSubscriptionManager_NotifyNonExistentToken(t *testing.T) {
+// Test that Tickleing a non-existent token does nothing.
+func TestSubscriptionManager_TickleNonExistentToken(t *testing.T) {
 	// Arrange
-	sm := signal.NewSubscriptionManager()
+	sm := tickle.NewTickler()
 	ctx := context.Background()
-	sub := sm.Add(ctx, "token1")
+	sub := sm.Subscribe(ctx, "token1")
 
 	var result bool
 	var wg sync.WaitGroup
@@ -188,7 +188,7 @@ func TestSubscriptionManager_NotifyNonExistentToken(t *testing.T) {
 	}()
 
 	// Act
-	sm.Notify("token2")
+	sm.Tickle("token2")
 
 	// Assert
 	wg.Wait()

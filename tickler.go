@@ -1,4 +1,4 @@
-package signal
+package tickle
 
 import (
 	"context"
@@ -6,32 +6,42 @@ import (
 	"time"
 )
 
-type SubscriptionManager struct {
+// NewTickler creates a new subscription manager.
+func NewTickler() *Tickler {
+	return &Tickler{}
+}
+
+type Tickler struct {
 	subscriptions sync.Map // Key: token, Value: []*Subscription
 }
 
-// Add creates a new subscription and associates it with one or more tokens.
-func (sm *SubscriptionManager) Add(ctx context.Context, tokens ...string) *Subscription {
+// Subscribe creates a new subscription and associates it with one or more tokens.
+func (sm *Tickler) Subscribe(ctx context.Context, tokens ...string) *Subscription {
 	sub := NewSubscription(ctx, tokens...)
 
 	for _, token := range tokens {
 		existing, _ := sm.subscriptions.Load(token)
-
 		var subs []*Subscription
 		if existing != nil {
 			if list, ok := existing.([]*Subscription); ok {
 				subs = list
 			}
 		}
-
 		subs = append(subs, sub)
 		sm.subscriptions.Store(token, subs)
 	}
+
+	// Automatically unsubscribe when context is done
+	go func() {
+		<-ctx.Done()
+		sm.Unsubscribe(sub)
+	}()
+
 	return sub
 }
 
-// Remove disposes of a subscription and removes it from all associated tokens.
-func (sm *SubscriptionManager) Remove(sub *Subscription) {
+// Unsubscribe disposes of a subscription and removes it from all associated tokens.
+func (sm *Tickler) Unsubscribe(sub *Subscription) {
 	sub.Dispose() // Ensure it's disposed before removing.
 
 	for _, token := range sub.tokens {
@@ -61,8 +71,8 @@ func (sm *SubscriptionManager) Remove(sub *Subscription) {
 	}
 }
 
-// Notify sends a signal to all subscribers of the given tokens.
-func (sm *SubscriptionManager) Notify(tokens ...string) {
+// Tickle sends a notifies to all subscribers of the given tokens.
+func (sm *Tickler) Tickle(tokens ...string) {
 	for _, token := range tokens {
 		value, ok := sm.subscriptions.Load(token)
 		if !ok {
@@ -75,14 +85,9 @@ func (sm *SubscriptionManager) Notify(tokens ...string) {
 		}
 
 		for _, sub := range subs {
-			sub.Notify()
+			sub.Tickle()
 		}
 	}
-}
-
-// NewSubscriptionManager creates a new subscription manager.
-func NewSubscriptionManager() *SubscriptionManager {
-	return &SubscriptionManager{}
 }
 
 // Subscription represents a single event listener.
@@ -106,8 +111,8 @@ func NewSubscription(ctx context.Context, tokens ...string) *Subscription {
 	}
 }
 
-// Notify signals the subscription if it is still active.
-func (s *Subscription) Notify() {
+// Tickle signals the subscription if it is still active.
+func (s *Subscription) Tickle() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

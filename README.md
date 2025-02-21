@@ -1,7 +1,7 @@
-[![ci](https://github.com/fgrzl/signal/actions/workflows/ci.yml/badge.svg)](https://github.com/fgrzl/signal/actions/workflows/ci.yml)
-[![Dependabot Updates](https://github.com/fgrzl/signal/actions/workflows/dependabot/dependabot-updates/badge.svg)](https://github.com/fgrzl/signal/actions/workflows/dependabot/dependabot-updates)
+[![ci](https://github.com/fgrzl/tickle/actions/workflows/ci.yml/badge.svg)](https://github.com/fgrzl/tickle/actions/workflows/ci.yml)
+[![Dependabot Updates](https://github.com/fgrzl/tickle/actions/workflows/dependabot/dependabot-updates/badge.svg)](https://github.com/fgrzl/tickle/actions/workflows/dependabot/dependabot-updates)
 
-# Signal
+# tickle
 
 ## Table of Contents
 
@@ -16,8 +16,8 @@
 ## Features
 
 - Add and remove subscriptions
-- Notify subscribers based on tokens
-- Wait for notifications with or without timeouts
+- Tickle subscribers based on tokens
+- Wait for tickles with or without timeouts
 - Dispose of subscriptions safely
 
 ## Installation
@@ -25,7 +25,7 @@
 To install the library, use `go get`:
 
 ```sh
-go get github.com/fgrzl/signal
+go get github.com/fgrzl/tickle
 ```
 
 ## Usage
@@ -40,11 +40,11 @@ import (
     "fmt"
     "time"
 
-    "github.com/fgrzl/signal"
+    "github.com/fgrzl/tickle"
 )
 
 func main() {
-    sm := signal.NewSubscriptionManager()
+    sm := tickle.NewTickler()
     ctx := context.Background()
     sub := sm.Add(ctx, "token1")
 
@@ -55,6 +55,6 @@ func main() {
     }()
 
     time.Sleep(1 * time.Second)
-    sm.Notify("token1")
+    sm.Tickle("token1")
 }
 ```
