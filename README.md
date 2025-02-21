@@ -46,7 +46,7 @@ import (
 func main() {
     sm := tickle.NewTickler()
     ctx := context.Background()
-    sub := sm.Add(ctx, "token1")
+    sub := sm.Subscribe(ctx, "token1")
 
     go func() {
         if sub.Wait() {
