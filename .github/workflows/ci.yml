@@ -38,6 +38,3 @@ jobs:
 
       - name: Run Tests
         run: go test ./... -v
-
-      - name: Workflow Cleanup
-        uses: fgrzl/actions/workflow-cleanup@v0.0.6
