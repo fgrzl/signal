@@ -90,8 +90,9 @@ func TestSubscriptionManager_Remove(t *testing.T) {
 // Test disposing a subscription.
 func TestSubscription_Dispose(t *testing.T) {
 	// Arrange
+	sm := tickle.NewTickler()
 	ctx := context.Background()
-	sub := tickle.NewSubscription(ctx, "token1")
+	sub := sm.Subscribe(ctx, "token1")
 
 	var result bool
 	var wg sync.WaitGroup
