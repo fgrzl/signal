@@ -6,102 +6,90 @@ import (
 	"time"
 )
 
-// NewTickler creates a new subscription manager.
-func NewTickler() *Tickler {
-	return &Tickler{}
-}
-
+// Tickler manages subscriptions and dispatches notifications by token.
 type Tickler struct {
-	subscriptions sync.Map // Key: token, Value: []*Subscription
+	mu   sync.Mutex
+	subs map[string][]*Subscription
 }
 
-// Subscribe creates a new subscription and associates it with one or more tokens.
-func (sm *Tickler) Subscribe(ctx context.Context, tokens ...string) *Subscription {
-	sub := NewSubscription(ctx, tokens...)
-
-	for _, token := range tokens {
-		existing, _ := sm.subscriptions.Load(token)
-		var subs []*Subscription
-		if existing != nil {
-			if list, ok := existing.([]*Subscription); ok {
-				subs = list
-			}
-		}
-		subs = append(subs, sub)
-		sm.subscriptions.Store(token, subs)
+// NewTickler creates a new Tickler.
+func NewTickler() *Tickler {
+	return &Tickler{
+		subs: make(map[string][]*Subscription),
 	}
+}
 
-	// Automatically unsubscribe when context is done
+// Subscribe creates a subscription for the given tokens.
+// The subscription is automatically removed when its context is canceled.
+func (t *Tickler) Subscribe(ctx context.Context, tokens ...string) *Subscription {
+	sub := newSubscription(ctx, tokens...)
+
+	t.mu.Lock()
+	for _, token := range tokens {
+		t.subs[token] = append(t.subs[token], sub)
+	}
+	t.mu.Unlock()
+
 	go func() {
-		<-ctx.Done()
-		sm.Unsubscribe(sub)
+		<-sub.Done()
+		t.remove(sub)
 	}()
 
 	return sub
 }
 
-// Unsubscribe disposes of a subscription and removes it from all associated tokens.
-func (sm *Tickler) Unsubscribe(sub *Subscription) {
-	sub.Dispose() // Ensure it's disposed before removing.
+// Unsubscribe disposes a subscription and removes it from all associated tokens.
+func (t *Tickler) Unsubscribe(sub *Subscription) {
+	sub.Dispose()
+}
+
+// remove deletes the subscription from internal tracking.
+func (t *Tickler) remove(sub *Subscription) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 
 	for _, token := range sub.tokens {
-		value, ok := sm.subscriptions.Load(token)
-		if !ok {
-			continue // Avoid processing if not found
-		}
-
-		subs, ok := value.([]*Subscription)
-		if !ok {
-			continue // Prevent panic in case of incorrect type
-		}
-
-		// Remove the specific subscription.
-		var updatedSubs []*Subscription
-		for _, s := range subs {
-			if s != sub {
-				updatedSubs = append(updatedSubs, s)
+		subs := t.subs[token]
+		for i, s := range subs {
+			if s == sub {
+				subs[i] = subs[len(subs)-1]
+				subs[len(subs)-1] = nil
+				subs = subs[:len(subs)-1]
+				break
 			}
 		}
-
-		if len(updatedSubs) == 0 {
-			sm.subscriptions.Delete(token) // Remove token entry if no subscriptions left.
+		if len(subs) == 0 {
+			delete(t.subs, token)
 		} else {
-			sm.subscriptions.Store(token, updatedSubs)
+			t.subs[token] = subs
 		}
 	}
 }
 
-// Tickle sends a notifies to all subscribers of the given tokens.
-func (sm *Tickler) Tickle(tokens ...string) {
+// Tickle notifies all subscribers of the given tokens.
+func (t *Tickler) Tickle(tokens ...string) {
+	t.mu.Lock()
+	var targets []*Subscription
 	for _, token := range tokens {
-		value, ok := sm.subscriptions.Load(token)
-		if !ok {
-			continue
-		}
+		targets = append(targets, t.subs[token]...)
+	}
+	t.mu.Unlock()
 
-		subs, ok := value.([]*Subscription)
-		if !ok {
-			continue
-		}
-
-		for _, sub := range subs {
-			sub.Tickle()
-		}
+	for _, sub := range targets {
+		sub.Tickle()
 	}
 }
 
-// Subscription represents a single event listener.
+// Subscription represents a notification listener bound to one or more tokens.
 type Subscription struct {
-	ctx      context.Context
-	cancel   context.CancelFunc
-	tokens   []string
-	ch       chan struct{}
-	mu       sync.Mutex
-	disposed bool
+	ctx    context.Context
+	cancel context.CancelFunc
+	tokens []string
+	ch     chan struct{}
+	once   sync.Once
 }
 
-// NewSubscription creates a new subscription.
-func NewSubscription(ctx context.Context, tokens ...string) *Subscription {
+func newSubscription(ctx context.Context, tokens ...string) *Subscription {
 	ctx, cancel := context.WithCancel(ctx)
 	return &Subscription{
 		ctx:    ctx,
@@ -111,33 +99,35 @@ func NewSubscription(ctx context.Context, tokens ...string) *Subscription {
 	}
 }
 
-// Tickle signals the subscription if it is still active.
+// Tickle signals the subscription. No-op if disposed.
 func (s *Subscription) Tickle() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.disposed {
-		return // Prevent sending to a closed channel
+	select {
+	case <-s.ctx.Done():
+		return
+	default:
 	}
-
 	select {
 	case s.ch <- struct{}{}:
 	default:
 	}
 }
 
-// Wait blocks until a notification is received or the context is canceled.
+// Wait blocks until a notification is received or the subscription is disposed.
 func (s *Subscription) Wait() bool {
 	select {
 	case <-s.ctx.Done():
 		return false
 	case <-s.ch:
-		return true
+		select {
+		case <-s.ctx.Done():
+			return false
+		default:
+			return true
+		}
 	}
 }
 
-// WaitTimeout waits for a signal until the timeout expires.
-// Returns true if a signal was received, false if the subscription is canceled or timed out.
+// WaitTimeout blocks until a notification, timeout, or disposal.
 func (s *Subscription) WaitTimeout(timeout time.Duration) bool {
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
@@ -146,26 +136,23 @@ func (s *Subscription) WaitTimeout(timeout time.Duration) bool {
 	case <-s.ctx.Done():
 		return false
 	case <-s.ch:
-		return !s.disposed
+		select {
+		case <-s.ctx.Done():
+			return false
+		default:
+			return true
+		}
 	case <-timer.C:
 		return false
 	}
 }
 
+// Done returns a channel that is closed when the subscription is disposed.
+func (s *Subscription) Done() <-chan struct{} {
+	return s.ctx.Done()
+}
+
+// Dispose cancels the subscription. Safe to call multiple times.
 func (s *Subscription) Dispose() {
-	s.mu.Lock()
-	if s.disposed {
-		s.mu.Unlock()
-		return
-	}
-	s.disposed = true
-
-	// Drain the channel to remove any lingering notifications
-	for len(s.ch) > 0 {
-		<-s.ch
-	}
-
-	close(s.ch) // Safe since only Dispose() closes it.
-	s.cancel()
-	s.mu.Unlock()
+	s.once.Do(s.cancel)
 }
