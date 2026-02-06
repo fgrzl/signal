@@ -26,8 +26,8 @@ jobs:
         id: version
         uses: gittools/actions/gitversion/execute@v4.2.0
 
-      - name: Tag Commit
-        uses: fgrzl/actions/tag-commit@v0.0.6
+      - name: Set Up Go
+        uses: actions/setup-go@v6
         with:
           tag: ${{ steps.version.outputs.semVer }}
 
