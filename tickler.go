@@ -127,6 +127,25 @@ func (s *Subscription) Wait() bool {
 	}
 }
 
+// WaitContext blocks until a notification is received, the context is canceled, or the subscription is disposed.
+func (s *Subscription) WaitContext(ctx context.Context) bool {
+	select {
+	case <-s.ctx.Done():
+		return false
+	case <-ctx.Done():
+		return false
+	case <-s.ch:
+		select {
+		case <-s.ctx.Done():
+			return false
+		case <-ctx.Done():
+			return false
+		default:
+			return true
+		}
+	}
+}
+
 // WaitTimeout blocks until a notification, timeout, or disposal.
 func (s *Subscription) WaitTimeout(timeout time.Duration) bool {
 	timer := time.NewTimer(timeout)
