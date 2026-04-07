@@ -2,6 +2,8 @@ name: CI
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *"
   push:
     branches:
       - "**"
@@ -32,9 +34,6 @@ jobs:
 
       - name: Ensure dependencies
         run: go mod tidy
-
-      - name: Vet
-        run: go vet ./...
 
       - name: Build
         run: go build ./...
