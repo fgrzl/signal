@@ -19,6 +19,8 @@
 - Tickle subscribers based on tokens
 - Wait for tickles with or without timeouts
 - Dispose of subscriptions safely
+- `Subscribe(nil, ...)` is supported and treated as `context.Background()`
+- Wait semantics prioritize buffered notifications: once a notification is available, `Wait`, `WaitTimeout`, and `WaitContext` return `true`
 
 ## Installation
 

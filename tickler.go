@@ -90,12 +90,25 @@ type Subscription struct {
 }
 
 func newSubscription(ctx context.Context, tokens ...string) *Subscription {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	ctx, cancel := context.WithCancel(ctx)
 	return &Subscription{
 		ctx:    ctx,
 		cancel: cancel,
 		tokens: tokens,
 		ch:     make(chan struct{}, 1),
+	}
+}
+
+func (s *Subscription) tryConsumeTickle() bool {
+	select {
+	case <-s.ch:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -114,55 +127,54 @@ func (s *Subscription) Tickle() {
 
 // Wait blocks until a notification is received or the subscription is disposed.
 func (s *Subscription) Wait() bool {
+	if s.tryConsumeTickle() {
+		return true
+	}
+
 	select {
-	case <-s.ctx.Done():
-		return false
 	case <-s.ch:
-		select {
-		case <-s.ctx.Done():
-			return false
-		default:
-			return true
-		}
+		return true
+	case <-s.ctx.Done():
+		return s.tryConsumeTickle()
 	}
 }
 
 // WaitContext blocks until a notification is received, the context is canceled, or the subscription is disposed.
 func (s *Subscription) WaitContext(ctx context.Context) bool {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	if s.tryConsumeTickle() {
+		return true
+	}
+
 	select {
-	case <-s.ctx.Done():
-		return false
-	case <-ctx.Done():
-		return false
 	case <-s.ch:
-		select {
-		case <-s.ctx.Done():
-			return false
-		case <-ctx.Done():
-			return false
-		default:
-			return true
-		}
+		return true
+	case <-s.ctx.Done():
+		return s.tryConsumeTickle()
+	case <-ctx.Done():
+		return s.tryConsumeTickle()
 	}
 }
 
 // WaitTimeout blocks until a notification, timeout, or disposal.
 func (s *Subscription) WaitTimeout(timeout time.Duration) bool {
+	if s.tryConsumeTickle() {
+		return true
+	}
+
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 
 	select {
-	case <-s.ctx.Done():
-		return false
 	case <-s.ch:
-		select {
-		case <-s.ctx.Done():
-			return false
-		default:
-			return true
-		}
+		return true
+	case <-s.ctx.Done():
+		return s.tryConsumeTickle()
 	case <-timer.C:
-		return false
+		return s.tryConsumeTickle()
 	}
 }
 

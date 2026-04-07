@@ -195,3 +195,90 @@ func TestSubscriptionManager_TickleNonExistentToken(t *testing.T) {
 	wg.Wait()
 	assert.False(t, result, "Subscription should not receive a notification for an unrelated token")
 }
+
+func TestSubscription_SubscribeNilContext(t *testing.T) {
+	// Arrange
+	sm := tickle.NewTickler()
+	var nilCtx context.Context
+
+	var sub *tickle.Subscription
+	assert.NotPanics(t, func() {
+		sub = sm.Subscribe(nilCtx, "token1")
+	}, "Subscribe(nil, ...) should not panic")
+	require.NotNil(t, sub)
+
+	// Act
+	sm.Tickle("token1")
+
+	// Assert
+	assert.True(t, sub.WaitTimeout(100*time.Millisecond), "Subscription created with nil context should receive notifications")
+}
+
+func TestSubscription_WaitContext_CancelledContext(t *testing.T) {
+	// Arrange
+	sm := tickle.NewTickler()
+	sub := sm.Subscribe(context.Background(), "token1")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// Act / Assert
+	assert.False(t, sub.WaitContext(ctx), "WaitContext should return false when caller context is canceled first")
+}
+
+func TestSubscription_WaitContext_DisposedSubscription(t *testing.T) {
+	// Arrange
+	sm := tickle.NewTickler()
+	sub := sm.Subscribe(context.Background(), "token1")
+	sub.Dispose()
+
+	// Act / Assert
+	assert.False(t, sub.WaitContext(context.Background()), "WaitContext should return false when the subscription is disposed first")
+}
+
+func TestSubscription_WaitContext_NilContext(t *testing.T) {
+	// Arrange
+	sm := tickle.NewTickler()
+	sub := sm.Subscribe(context.Background(), "token1")
+	var nilCtx context.Context
+
+	// Act
+	sm.Tickle("token1")
+
+	// Assert
+	assert.True(t, sub.WaitContext(nilCtx), "WaitContext(nil) should be treated as context.Background()")
+}
+
+func TestSubscription_NotificationWinsWaitWhenBufferedAndDisposed(t *testing.T) {
+	// Arrange
+	sm := tickle.NewTickler()
+	sub := sm.Subscribe(context.Background(), "token1")
+	sm.Tickle("token1")
+	sub.Dispose()
+
+	// Act / Assert
+	assert.True(t, sub.Wait(), "Wait should return true when a notification is already buffered")
+}
+
+func TestSubscription_NotificationWinsWaitTimeoutWhenBufferedAndDisposed(t *testing.T) {
+	// Arrange
+	sm := tickle.NewTickler()
+	sub := sm.Subscribe(context.Background(), "token1")
+	sm.Tickle("token1")
+	sub.Dispose()
+
+	// Act / Assert
+	assert.True(t, sub.WaitTimeout(1*time.Millisecond), "WaitTimeout should return true when a notification is already buffered")
+}
+
+func TestSubscription_NotificationWinsWaitContextWhenBufferedAndDisposed(t *testing.T) {
+	// Arrange
+	sm := tickle.NewTickler()
+	sub := sm.Subscribe(context.Background(), "token1")
+	ctx, cancel := context.WithCancel(context.Background())
+	sm.Tickle("token1")
+	sub.Dispose()
+	cancel()
+
+	// Act / Assert
+	assert.True(t, sub.WaitContext(ctx), "WaitContext should return true when a notification is already buffered")
+}
