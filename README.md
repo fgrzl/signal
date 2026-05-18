@@ -3,60 +3,56 @@
 
 # Tickle
 
-## Table of Contents
-
-- [Features](#features)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Running Tests](#running-tests)
-- [Contributing](#contributing)
-- [License](#license)
-- [Acknowledgements](#acknowledgements)
+In-process, token-based pub/sub notifications with blocking waits.
 
 ## Features
 
-- Add and remove subscriptions
-- Tickle subscribers based on tokens
-- Wait for tickles with or without timeouts
-- Dispose of subscriptions safely
-- `Subscribe(nil, ...)` is supported and treated as `context.Background()`
-- Wait semantics prioritize buffered notifications: once a notification is available, `Wait`, `WaitTimeout`, and `WaitContext` return `true`
+- Subscribe to one or more string tokens
+- `Tickle` subscribers from any goroutine
+- `Wait`, `WaitTimeout`, and `WaitContext` on subscriptions
+- Safe disposal and unsubscribe
+- `Subscribe(nil, ...)` uses `context.Background()`
+- Buffered notifications win over dispose for wait calls
 
 ## Installation
 
-To install the library, use `go get`:
-
-```sh
+```bash
 go get github.com/fgrzl/tickle
 ```
 
-## Usage
-
-Here is an example of how to use the library:
+## Quick example
 
 ```go
-package main
+sm := tickle.NewTickler()
+sub := sm.Subscribe(context.Background(), "token1")
 
-import (
-    "context"
-    "fmt"
-    "time"
+go func() {
+    if sub.Wait() {
+        fmt.Println("Received notification for token1")
+    }
+}()
 
-    "github.com/fgrzl/tickle"
-)
-
-func main() {
-    sm := tickle.NewTickler()
-    ctx := context.Background()
-    sub := sm.Subscribe(ctx, "token1")
-
-    go func() {
-        if sub.Wait() {
-            fmt.Println("Received notification for token1")
-        }
-    }()
-
-    time.Sleep(1 * time.Second)
-    sm.Tickle("token1")
-}
+time.Sleep(time.Second)
+sm.Tickle("token1")
 ```
+
+## Documentation
+
+Full guides: **[docs/](docs/README.md)**
+
+- [Overview](docs/overview.md)
+- [Getting started](docs/getting-started.md)
+
+## Running tests
+
+```bash
+go test ./...
+```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+See repository license file.
