@@ -50,7 +50,9 @@ if sub.WaitTimeout(5 * time.Second) {
 ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 defer cancel()
 if sub.WaitContext(ctx) {
-    // notified or context done
+    // notification received
+} else {
+    // context canceled, disposed, or timed out without a tickle
 }
 ```
 

@@ -13,7 +13,7 @@ Tickle provides **cooperative notification** inside a single process: subscriber
 
 - **Buffered delivery** — once a notification is buffered, wait calls return promptly even if the subscription is disposed afterward
 - **Token fan-out** — one `Tickle("a", "b")` notifies every subscription that includes either token
-- **Context** — `Subscribe(nil, ...)` uses `context.Background()`; cancellation stops blocked waits via `WaitContext`
+- **Context** — `Subscribe(nil, ...)` uses `context.Background()`; canceling the subscribe context unblocks `Wait`, `WaitTimeout`, and `WaitContext` (via `Done()`). `WaitContext` also respects the caller's context.
 - **Thread-safe** — safe concurrent subscribe, tickle, and wait from multiple goroutines
 
 ## What Tickle is not
