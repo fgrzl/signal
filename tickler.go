@@ -83,7 +83,7 @@ func (t *Tickler) Tickle(tokens ...string) {
 // Subscription represents a notification listener bound to one or more tokens.
 type Subscription struct {
 	ctx    context.Context
-	cancel context.CancelFunc
+	done   chan struct{}
 	tokens []string
 	ch     chan struct{}
 	once   sync.Once
@@ -94,12 +94,30 @@ func newSubscription(ctx context.Context, tokens ...string) *Subscription {
 		ctx = context.Background()
 	}
 
-	ctx, cancel := context.WithCancel(ctx)
-	return &Subscription{
+	s := &Subscription{
 		ctx:    ctx,
-		cancel: cancel,
+		done:   make(chan struct{}),
 		tokens: tokens,
 		ch:     make(chan struct{}, 1),
+	}
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			s.Dispose()
+		case <-s.done:
+		}
+	}()
+
+	return s
+}
+
+func (s *Subscription) disposed() bool {
+	select {
+	case <-s.done:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -114,10 +132,8 @@ func (s *Subscription) tryConsumeTickle() bool {
 
 // Tickle signals the subscription. No-op if disposed.
 func (s *Subscription) Tickle() {
-	select {
-	case <-s.ctx.Done():
+	if s.disposed() {
 		return
-	default:
 	}
 	select {
 	case s.ch <- struct{}{}:
@@ -134,7 +150,7 @@ func (s *Subscription) Wait() bool {
 	select {
 	case <-s.ch:
 		return true
-	case <-s.ctx.Done():
+	case <-s.done:
 		return s.tryConsumeTickle()
 	}
 }
@@ -152,7 +168,7 @@ func (s *Subscription) WaitContext(ctx context.Context) bool {
 	select {
 	case <-s.ch:
 		return true
-	case <-s.ctx.Done():
+	case <-s.done:
 		return s.tryConsumeTickle()
 	case <-ctx.Done():
 		return s.tryConsumeTickle()
@@ -171,7 +187,7 @@ func (s *Subscription) WaitTimeout(timeout time.Duration) bool {
 	select {
 	case <-s.ch:
 		return true
-	case <-s.ctx.Done():
+	case <-s.done:
 		return s.tryConsumeTickle()
 	case <-timer.C:
 		return s.tryConsumeTickle()
@@ -180,10 +196,12 @@ func (s *Subscription) WaitTimeout(timeout time.Duration) bool {
 
 // Done returns a channel that is closed when the subscription is disposed.
 func (s *Subscription) Done() <-chan struct{} {
-	return s.ctx.Done()
+	return s.done
 }
 
-// Dispose cancels the subscription. Safe to call multiple times.
+// Dispose closes the subscription. Safe to call multiple times.
 func (s *Subscription) Dispose() {
-	s.once.Do(s.cancel)
+	s.once.Do(func() {
+		close(s.done)
+	})
 }
